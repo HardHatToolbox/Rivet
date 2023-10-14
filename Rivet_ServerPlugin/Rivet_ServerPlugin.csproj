@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="ApiModels">
+      <HintPath>..\..\..\HardHatC2\ApiModels\bin\x64\Debug\net7.0\ApiModels.dll</HintPath>
+    </Reference>
+    <Reference Include="TeamServer">
+      <HintPath>..\..\..\HardHatC2\TeamServer\bin\x64\Debug\net7.0\TeamServer.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

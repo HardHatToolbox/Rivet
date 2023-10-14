@@ -1,0 +1,234 @@
+﻿@using ApiModels.Plugin_BaseClasses;
+@using ApiModels.Requests;
+@using ApiModels.Shared;
+@using HardHatC2Client.Components;
+@using HardHatC2Client.Models;
+@using HardHatC2Client.Pages;
+@using HardHatC2Client.Plugin_Management;
+@using HardHatC2Client.Utilities;
+@using MudBlazor;
+@using MudBlazor.Extensions;
+@using MudExtensions;
+@using MudExtensions.Enums;
+@using RestSharp;
+@using System.Text;
+
+
+<!-- this component is used i nthe second stage of the implant creation, normally it it is a mud stepper containing a 3 step, with commands, modules, and build, but i dont need dynamiccommands or modules-->
+<!-- start out by copying the implantCreation_PluginContnet.razor component inside the client and edit as needed -->
+<MudStepper @ref="_stepper" Class="mud-width-full" HeaderSize="Size.Large" Color="Color.Primary" Variant="Variant.Filled" HeaderTextView="MudExtensions.Enums.HeaderTextView.All" PreventStepChangeAsync="new Func<StepChangeDirection, Task<bool>>(CheckChange)"  >
+            <ChildContent>
+                <MudStep Icon="@Icons.Material.Outlined.Construction" Title="Build Options">
+                    <ChildContent>
+                        <MudForm @ref="_form1" @bind-IsValid="@success">
+                            <MudSelectExtended ValuePresenter="ValuePresenter.Text"  T="string" Clearable="true" Label="Manager" AnchorOrigin="Origin.BottomCenter" Variant="Variant.Filled" Required="true" @bind-value="formData.managerName" RequiredError="Type is required!">
+                                <MudSelectItemGroupExtended  T="string" Text="HTTP" Sticky="true" Nested="true">
+                                    @foreach (Manager manager in @Managers.managersList.Where(x => x.Type == ManagerType.http))
+                                    {
+                                        <ItemTemplate>
+                                            <MudStack Row="true" Justify="Justify.SpaceEvenly" AlignItems="AlignItems.Center">
+                                                <MudSelectItemExtended Value="@manager.Name" />
+                                                <MudChip Color="Color.Info" Variant="Variant.Outlined">Connect Address: @manager.ConnectionAddress</MudChip>
+                                                <MudChip Color="Color.Info" Variant="Variant.Outlined">Connect Port: @manager.ConnectionPort</MudChip>
+                                            </MudStack>
+                                        </ItemTemplate>
+                                    }
+                                </MudSelectItemGroupExtended>
+                            </MudSelectExtended>
+                           
+                    <MudTextField Clearable="true" Class="mb-4 mt-4" T="int" Label="Connection Attempts" Variant="Variant.Filled" Required="true" @bind-value="formData.ConnectionAttempts" RequiredError="connection attempt count is required" />
+                    <MudTextField Clearable="true" Class="mb-4 mt-4" T="int" Label="sleep timer" Variant="Variant.Filled" Required="true" @bind-value="formData.Sleep" RequiredError="sleep time (secs) is required!" />
+                    <div class="d-flex">
+                        <MudDatePicker Variant="Variant.Filled" Class="mr-1 mb-4 mt-4" Clearable="true" Required="true" Label="Pick a date" @bind-Date="formData.selectedKillDate"></MudDatePicker>
+                        <MudTimePicker Variant="Variant.Filled" Class="ml-1 mb-4 mt-4" Clearable="true" Label="Pick a time in UTC" Required="true" @bind-Time="formData.selectedKillTime"></MudTimePicker>
+                    </div>
+                            @if (IsPostEx)
+                        {
+                            <MudSelectExtended Clearable="true" Class="mb-4 mt-4" T="ImpCompileType" Label="Compile Type" Variant="Variant.Filled" Required="true" @bind-value="formData.complieType" RequiredError="Type is required!">
+                                <MudSelectItem Value="@(ImpCompileType.exe)" />
+                            </MudSelectExtended>
+                        }
+                        else
+                        {
+                                <MudSelectExtended Clearable="true" Class="mb-4 mt-4" T="ImpCompileType" Label="Compile Type" Variant="Variant.Filled" Required="true" @bind-value="formData.complieType" RequiredError="Type is required!">
+                                    <MudSelectItemExtended Value="@(ImpCompileType.exe)" />
+                                </MudSelectExtended>
+                            }
+@*                            @if(formData.complieType == ImpCompileType.shellcode)
+                            {
+                                <MudCheckBox @bind-Checked="@formData.EncodeShellcode" Label="Encode Shellcode with SGN ?" Color="Color.Primary"></MudCheckBox>        
+                            }*@
+                        </MudForm>
+                    </ChildContent>
+                </MudStep>
+                <MudStep Icon="@Icons.Material.Filled.Build" Title="Finalize & Submit">
+                    <ChildContent>
+                    <!-- for each item in formData print the property name and its value-->
+                    @foreach (var item in formData.GetType().GetProperties())
+                    {
+                        StringBuilder sb = new();
+                        if (item.Name.Equals("IsPostEx"))
+                        {
+                            continue;
+                        }
+                        if (formData.IncludedCommands != null)
+                        {
+                            if (item.Name.Equals("IncludedCommands"))
+                            {
+                                //these values are lists add their values to a string builder
+                                if (item.Name.Equals("IncludedCommands"))
+                                {
+                                    sb.Append("Included Commands: ");
+                                    foreach (var command in formData.IncludedCommands)
+                                    {
+                                        sb.Append(command + ", ");
+                                    }
+                                }
+                            }
+                        }
+                        else if(formData.IncludedModules != null)
+                        {
+                            if (item.Name.Equals("IncludedModules"))
+                            {
+                                sb.Append("Included Modules: ");
+                                foreach (var module in formData.IncludedModules)
+                                {
+                                    sb.Append(module + ", ");
+                                }
+                            }
+                        }
+                    else
+                    {
+                        <MudText>@item.Name : @item.GetValue(formData)</MudText>
+                    }
+                    //remove the last comma
+                    if(sb.Length >0)
+                    {
+                        sb.Remove(sb.Length - 2, 2);
+                        <MudText>@item.Name : @sb.ToString()</MudText>
+                    }
+                    }
+                            </ChildContent>
+                        </MudStep>
+            </ChildContent>
+                <ActionContent>
+                    @if (_stepper.IsAllStepsCompleted() && success)
+                    {
+                        validSubmit();
+                        _stepper.Reset();
+                        _form1.ResetAsync();
+                        StateHasChanged();
+                    }
+                    <MudSpacer />
+                </ActionContent>
+</MudStepper>
+            <br>
+            <hr>
+@*            <div>
+            @if (formData.complieType == ImpCompileType.powershellcmd)
+            {
+                <MudTextField @bind-Value="PsCmd" Label="Powershell Commmand" ReadOnly="true" Variant="Variant.Outlined"/>
+            }
+            </div>*@
+
+@code {
+
+    [CascadingParameter]
+    public bool IsPostEx { get; set; }
+    [CascadingParameter]
+    public MudDialogInstance Dialog { get; set; }
+    [CascadingParameter]
+    public string ImplantName { get; set; } = "";
+    [Inject]
+    private IDialogService dialogService { get; set; }
+    [Inject]
+    private static RestClient _restClient { get; set; }
+
+    private static ExtImplantCreateRequest_Base formData = new ExtImplantCreateRequest_Base();
+    MudStepper _stepper;
+    MudForm _form1;
+    bool _loading;
+
+
+    private bool success;
+    private string[] errors = { };
+
+    public static List<string> PostExCommandsThatSpawnNewImp = new List<string>() { "jump", "spawn", "inject" };
+
+
+    private async Task<bool> CheckChange(StepChangeDirection direction)
+    {
+        // Always allow stepping backwards, even if forms are invalid
+        if (direction == StepChangeDirection.Backward)
+        {
+            return false;
+        }
+        if (_stepper.GetActiveIndex() == 0)
+        {
+            _loading = true;
+            StateHasChanged();
+            await Task.Delay(1000);
+            await _form1.Validate();
+            _loading = false;
+            StateHasChanged();
+            return !_form1.IsValid;
+        }
+        else if (_stepper.GetActiveIndex() == 1)
+        {
+            _loading = true;
+            StateHasChanged();
+            await Task.Delay(1000);
+            _loading = false;
+            StateHasChanged();
+            return false;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public async Task validSubmit()
+    {
+        if (formData.managerName != null)
+        {
+            //some items here are hardcoded because they are not provided via user input above but are still "required"
+            //they do not have to be used later on when you make the implant but are required for the request to be valid
+            formData.implantType = ImplantName;
+            formData.ConnectionAttempts = 500;
+            formData.WorkingHours = null;
+            formData.SleepType = SleepTypes.None;
+            ImplantCreation_Dialog.PostExSpawnRequest.KillDateTime = (DateTime)(formData.selectedKillDate.Value.Date + formData.selectedKillTime);
+            formData.IsChunkEnabled = formData.IsChunkEnabled ?? false;
+            formData.ChunkSize = formData.ChunkSize ?? 0;
+            formData.IncludedCommands = new List<string>();
+            formData.IncludedModules = new List<string>();
+
+            
+            if (IsPostEx)
+            {
+                formData.IsPostEx = IsPostEx; // should be true if created via the postex dialog
+
+                
+                ImplantCreation_Dialog.PostExSpawnRequest.IsPostEx = formData.IsPostEx ?? false;
+                ImplantCreation_Dialog.PostExSpawnRequest.managerName = formData.managerName;
+                ImplantCreation_Dialog.PostExSpawnRequest.ConnectionAttempts = formData.ConnectionAttempts;
+                ImplantCreation_Dialog.PostExSpawnRequest.Sleep = formData.Sleep;
+                ImplantCreation_Dialog.PostExSpawnRequest.complieType = formData.complieType;
+                ImplantCreation_Dialog.PostExSpawnRequest.WorkingHours = formData.WorkingHours;
+                ImplantCreation_Dialog.PostExSpawnRequest.SleepType = formData.SleepType;
+                ImplantCreation_Dialog.PostExSpawnRequest.KillDateTime = formData.KillDateTime;
+                ImplantCreation_Dialog.PostExSpawnRequest.IsChunkEnabled = formData.IsChunkEnabled ?? false;
+                ImplantCreation_Dialog.PostExSpawnRequest.ChunkSize = formData.ChunkSize ?? 0;
+                ImplantCreation_Dialog.PostExSpawnRequest.implantType = formData.implantType;
+                ImplantCreation_Dialog.PostExSpawnRequest.IncludedCommands = formData.IncludedCommands;
+                ImplantCreation_Dialog.PostExSpawnRequest.IncludedModules = formData.IncludedModules;
+                formData = new ExtImplantCreateRequest_Base();
+                Dialog.Close(DialogResult.Ok(true));
+                return;
+            }
+            await Implants.CreateImplant(formData, new List<string>(), new List<string>());
+            formData = new ExtImplantCreateRequest_Base();
+        }
+    }
+}

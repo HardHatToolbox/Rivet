@@ -1,0 +1,112 @@
+﻿using TeamServer.Plugin_BaseClasses;
+using ApiModels.Plugin_Interfaces;
+using TeamServer.Utilities;
+using ApiModels.Shared;
+using TeamServer.Models;
+using TeamServer.Services;
+using System.Diagnostics;
+
+namespace TeamServer.ImplantPlugins
+{
+    [Export(typeof(ExtImplantService_Base))]
+    [ExportMetadata("Name", "Rivet")]
+    public class Rivet_serviceBase : ExtImplantService_Base
+    {
+        public override bool CreateExtImplant(IExtImplantCreateRequest request, out string result_message)
+        {
+            Console.WriteLine("Rivet implant creation called");
+            //I think this is still Location/HardHatC2/Teamserver/  but I'm not sure
+            string basePath = TeamServer.Utilities.Helpers.GetBaseFolderLocation();
+            //this then should be Location/HardHatC2/Rivet/
+            string rivetFolder = basePath + Helpers.PathingTraverseUpString + "Rivet" + Helpers.PlatPathSeperator;
+            //next up i need the src folder so i can make some string replacements with dynamic info 
+            string srcFolder = rivetFolder + "src" + Helpers.PlatPathSeperator;
+
+            string mainFile = File.ReadAllText($"{srcFolder}main.rs");
+            // we should make a copy of main.rs that we can restore after compile 
+            string mainFileCopy = mainFile;
+            File.WriteAllText($"{srcFolder}main.rs.bak", mainFileCopy);
+
+            Httpmanager manager = new();
+            foreach (manager m in managerService._managers)
+            {
+                if (m.Type == ManagerType.http && m.Name == request.managerName)
+                {
+                    manager = (Httpmanager)m;
+                }
+            }
+            //inside of this main file are some strings that need to be replaced 
+            //implant names need to be xor'd before being updated
+            mainFile = mainFile.Replace("{{REPLACE_IMPLANT_TYPE}}", Encryption.EncryptImplantName(request.implantType));
+            mainFile = mainFile.Replace("{{REPLACE_SLEEP_TIME}}", request.Sleep.ToString());
+          //  mainFile = mainFile.Replace("{{REPLACE_URLS}}", manager.c2Profile.Urls);
+           // mainFile = mainFile.Replace("{{REPLACE_COOKIES}}", manager.c2Profile.Cookies);
+            //mainFile = mainFile.Replace("{{REPLACE_REQUEST_HEADERS}}", manager.c2Profile.RequestHeaders);
+            mainFile = mainFile.Replace("{{REPLACE_USERAGENT}}", manager.c2Profile.UserAgent);
+            mainFile = mainFile.Replace("{{REPLACE_CONNECTION_IP}}", manager.ConnectionAddress);
+            mainFile = mainFile.Replace("{{REPLACE_CONNECTION_PORT}}", manager.ConnectionPort.ToString());
+            //now for rust we dont compile from reading the source as a string like with roslyn instead we need to save this back to disk
+            File.WriteAllText($"{srcFolder}main.rs", mainFile);
+
+            //get the metadata file
+            string metadataFile = File.ReadAllText($"{srcFolder}models{Helpers.PlatPathSeperator}rustyMetadata.rs");
+            //make a copy of the metadata file
+            string metadataFileCopy = metadataFile;
+            File.WriteAllText($"{srcFolder}models{Helpers.PlatPathSeperator}rustyMetadata.rs.bak", metadataFileCopy);
+            //replace the {{REPLACE_MANAGER_NAME}} with the manager name
+            metadataFile = metadataFile.Replace("{{REPLACE_MANAGER_NAME}}", request.managerName);
+            //now save the metadata file back to disk
+            File.WriteAllText($"{srcFolder}models{Helpers.PlatPathSeperator}rustyMetadata.rs", metadataFile);
+
+            //use a create cargo to compile the implant by calling cargo build
+            //this is the same as running cargo build from the command line
+            Console.WriteLine("Starting cargo build");
+            Process cargo = new();
+            cargo.StartInfo.FileName = "cargo";
+            cargo.StartInfo.Arguments = "build";
+            cargo.StartInfo.WorkingDirectory = rivetFolder;
+            cargo.StartInfo.UseShellExecute = false;
+            cargo.StartInfo.RedirectStandardOutput = true;
+            cargo.StartInfo.RedirectStandardError = true;
+            //redirect output to console
+            cargo.OutputDataReceived += (sender, args) => Console.WriteLine(args.Data);
+            cargo.ErrorDataReceived += (sender, args) => Console.WriteLine(args.Data);
+
+            cargo.Start();
+            cargo.WaitForExit();
+            string output = cargo.StandardOutput.ReadToEnd();
+            string error = cargo.StandardError.ReadToEnd();
+            Console.WriteLine(output);
+            Console.WriteLine(error);
+            cargo.Close();
+
+            //restore the overriden files
+            File.WriteAllText($"{srcFolder}main.rs", mainFileCopy);
+            File.WriteAllText($"{srcFolder}models{Helpers.PlatPathSeperator}rustyMetadata.rs", metadataFileCopy);
+
+            if(error.Length ==0)
+            {
+                result_message = $"Successfully compiled rivet implant, check {rivetFolder + "target" + Helpers.PlatPathSeperator + "debug"}";
+                return true;
+            }
+            else
+            {
+                result_message = "Failed to compile rivet implant";
+                return false;
+            }
+
+        }
+
+        public override byte[] EncryptImplantTaskData(byte[] bytesToEnc, string encryptionKey)
+        {
+            //rivet does not currently support encryption so we just return the bytesToEnc
+            return bytesToEnc;
+        }
+
+        public override byte[] DecryptImplantTaskData(byte[] bytesToDec, string encryptionKey)
+        {
+            //rivet does not currently support encryption so we just return the bytesToDec
+            return bytesToDec;
+        }
+    }
+}
