@@ -1,5 +1,5 @@
+#![allow(warnings)]
 extern crate core;
-
 mod comms;
 mod models;
 mod tasking;
@@ -26,6 +26,7 @@ static SLEEP_DURATION: Lazy<Mutex<i32>> = Lazy::new(|| Mutex::new(0));
 static METADATA: Lazy<Arc<Mutex<rustyMetadata>>> = Lazy::new(||Arc::new(Mutex::new(rustyMetadata::new())));
 const IMPLANT_TYPE: &str = "{{REPLACE_IMPLANT_TYPE}}";
 
+// This code is mainly meant to demo creating a HardHat Asset in non c# languages I am not good at rust :)
 fn main()
 {
     let sleep_time = "{{REPLACE_SLEEP_TIME}}";

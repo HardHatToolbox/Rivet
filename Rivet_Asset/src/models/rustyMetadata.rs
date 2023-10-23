@@ -45,7 +45,7 @@ impl rustyMetadata
             hostname: "hostname-DEMO".to_string(),
             address: "127.0.0.1".to_string(),
             username: "User-DEMO".to_string(),
-            process_name: "Rustineer-DEMO".to_string(),
+            process_name: "Rivet-DEMO".to_string(),
             process_id: 0,
             integrity: "High-DEMO".to_string(),
             arch: "x64".to_string(),
